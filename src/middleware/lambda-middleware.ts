@@ -98,7 +98,6 @@ export const errorHandlerMiddleware: Middleware = async (_event, context, next) 
  */
 export const loggingMiddleware: Middleware = async (event, context, next) => {
   const logger = createLogger('Lambda', {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     requestId: context.awsRequestId,
   });
 
@@ -141,7 +140,6 @@ export const corsMiddleware: Middleware = async (_event, _context, next) => {
 export function validationMiddleware<T>(schema: ZodSchema<T>): Middleware {
   return async (event, context, next) => {
     const logger = createLogger('Validation', {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       requestId: context.awsRequestId,
     });
 

@@ -74,8 +74,7 @@ export class DynamoDBRepository<T extends { [key: string]: unknown }, ID> implem
               Limit: params?.limit,
               ExclusiveStartKey:
                 params?.nextToken !== null && params?.nextToken !== undefined
-                  ? // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                    (JSON.parse(Buffer.from(params.nextToken, 'base64').toString()) as Record<
+                  ? (JSON.parse(Buffer.from(params.nextToken, 'base64').toString()) as Record<
                       string,
                       unknown
                     >)
@@ -87,7 +86,7 @@ export class DynamoDBRepository<T extends { [key: string]: unknown }, ID> implem
 
       return {
         items: (result.Items ?? []) as T[],
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
         nextToken:
           result.LastEvaluatedKey !== null && result.LastEvaluatedKey !== undefined
             ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
@@ -154,7 +153,6 @@ export class DynamoDBRepository<T extends { [key: string]: unknown }, ID> implem
         { logger: this.logger }
       );
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       return result.Attributes as T;
     } catch (error) {
       this.logger.error('Error updating item', error, { id, updates });
@@ -202,8 +200,7 @@ export class DynamoDBRepository<T extends { [key: string]: unknown }, ID> implem
               Limit: params?.limit,
               ExclusiveStartKey:
                 params?.nextToken !== null && params?.nextToken !== undefined
-                  ? // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                    (JSON.parse(Buffer.from(params.nextToken, 'base64').toString()) as Record<
+                  ? (JSON.parse(Buffer.from(params.nextToken, 'base64').toString()) as Record<
                       string,
                       unknown
                     >)
@@ -215,7 +212,7 @@ export class DynamoDBRepository<T extends { [key: string]: unknown }, ID> implem
 
       return {
         items: (result.Items ?? []) as T[],
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
         nextToken:
           result.LastEvaluatedKey !== null && result.LastEvaluatedKey !== undefined
             ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')

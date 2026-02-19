@@ -142,7 +142,7 @@ export const eventBridgeHandler = async (
 
   try {
     // Map EventBridge event to domain event
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const domainEvent: any = {
       type: event['detail-type'] as DomainEvent['type'],
       payload: event.detail as DomainEvent['payload'],
