@@ -9,6 +9,7 @@ build/
 *.d.ts
 *.js.map
 !jest.config.js
+!eslint.config.js
 
 # Serverless
 .serverless/
