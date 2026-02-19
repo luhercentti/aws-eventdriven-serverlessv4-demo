@@ -222,8 +222,8 @@ jobs:
       - name: Run npm audit on production dependencies
         run: npm audit --omit=dev --audit-level=moderate
 
-      - name: Run npm audit on all dependencies
-        run: npm audit --audit-level=high
+      - name: Run npm audit on all dependencies (informational)
+        run: npm audit --audit-level=high || echo "⚠️  DevDependency vulnerabilities found (non-blocking)"
         continue-on-error: true
 
       - name: Run Snyk security scan
