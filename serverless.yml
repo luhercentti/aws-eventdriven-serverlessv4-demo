@@ -1,0 +1,225 @@
+service: aws-eventdriven-typescript-demo
+
+frameworkVersion: '4'
+
+org: luhercentti
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 30
+  logRetentionInDays: 7
+  
+  environment:
+    ORDERS_TABLE_NAME: ${self:service}-orders-${self:provider.stage}
+    EVENT_BUS_NAME: ${self:service}-event-bus-${self:provider.stage}
+    NOTIFICATIONS_TOPIC_ARN: !Ref NotificationsTopic
+    PROCESSING_QUEUE_URL: !Ref ProcessingQueue
+    EVENT_SOURCE: order-service
+    LOG_LEVEL: INFO
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+            - dynamodb:Scan
+          Resource:
+            - !GetAtt OrdersTable.Arn
+            - !Sub "${OrdersTable.Arn}/index/*"
+        - Effect: Allow
+          Action:
+            - events:PutEvents
+          Resource:
+            - !GetAtt EventBus.Arn
+        - Effect: Allow
+          Action:
+            - sns:Publish
+          Resource:
+            - !Ref NotificationsTopic
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+          Resource:
+            - !GetAtt ProcessingQueue.Arn
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+  tracing:
+    lambda: true
+    apiGateway: true
+
+build:
+  esbuild:
+    bundle: true
+    minify: true
+    sourcemap: true
+    exclude:
+      - '@aws-sdk/*'
+    target: node20
+    platform: node
+
+plugins:
+  - serverless-offline
+
+functions:
+  # REST API Handlers
+  createOrder:
+    handler: src/handlers/order-handlers.createOrderHandler
+    description: Create new order
+    events:
+      - http:
+          path: orders
+          method: post
+          cors: true
+
+  getOrder:
+    handler: src/handlers/order-handlers.getOrderHandler
+    description: Get order by ID
+    events:
+      - http:
+          path: orders/{orderId}
+          method: get
+          cors: true
+
+  listOrders:
+    handler: src/handlers/order-handlers.listOrdersHandler
+    description: List orders
+    events:
+      - http:
+          path: orders
+          method: get
+          cors: true
+
+  updateOrder:
+    handler: src/handlers/order-handlers.updateOrderHandler
+    description: Update order
+    events:
+      - http:
+          path: orders/{orderId}
+          method: put
+          cors: true
+
+  deleteOrder:
+    handler: src/handlers/order-handlers.deleteOrderHandler
+    description: Delete order
+    events:
+      - http:
+          path: orders/{orderId}
+          method: delete
+          cors: true
+
+  # Event-Driven Handlers
+  eventBridgeHandler:
+    handler: src/handlers/event-handlers.eventBridgeHandler
+    description: Handle EventBridge events
+    events:
+      - eventBridge:
+          # Note: serverless-offline doesn't fully support GetAtt for eventBus
+          # For local testing, events won't trigger automatically
+          eventBus: ${self:service}-event-bus-${self:provider.stage}
+          pattern:
+            source:
+              - order-service
+              - payment-service
+            detail-type:
+              - ORDER_CREATED
+              - ORDER_UPDATED
+              - ORDER_DELETED
+              - PAYMENT_PROCESSED
+
+  sqsHandler:
+    handler: src/handlers/sqs-handlers.sqsHandler
+    description: Handle SQS messages
+    events:
+      - sqs:
+          arn: !GetAtt ProcessingQueue.Arn
+          batchSize: 10
+          # maximumBatchingWindowInSeconds: 5  # Not supported in serverless-offline
+
+resources:
+  Resources:
+    # DynamoDB Table
+    OrdersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:service}-orders-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+        SSESpecification:
+          SSEEnabled: true
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+        AttributeDefinitions:
+          - AttributeName: orderId
+            AttributeType: S
+          - AttributeName: customerId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: orderId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: CustomerIdIndex
+            KeySchema:
+              - AttributeName: customerId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    # EventBridge Event Bus
+    EventBus:
+      Type: AWS::Events::EventBus
+      Properties:
+        Name: ${self:service}-event-bus-${self:provider.stage}
+
+    # SNS Topic
+    NotificationsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        DisplayName: Order Notifications
+        TopicName: ${self:service}-notifications-${self:provider.stage}
+
+    # SQS Queue with DLQ
+    ProcessingQueueDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-processing-dlq-${self:provider.stage}
+        MessageRetentionPeriod: 1209600 # 14 days
+
+    ProcessingQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-processing-${self:provider.stage}
+        VisibilityTimeout: 300
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ProcessingQueueDLQ.Arn
+          maxReceiveCount: 3
+
+  Outputs:
+    ApiEndpoint:
+      Description: API Gateway endpoint URL
+      Value: !Sub "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${self:provider.stage}"
+    
+    OrdersTableName:
+      Description: DynamoDB table name
+      Value: !Ref OrdersTable
+    
+    EventBusName:
+      Description: EventBridge event bus name
+      Value: !Ref EventBus
+    
+    NotificationsTopicArn:
+      Description: SNS topic ARN
+      Value: !Ref NotificationsTopic
